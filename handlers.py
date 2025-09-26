@@ -4,42 +4,50 @@ import aiofiles
 import asyncio
 import logging
 import speech_recognition as sr
-from aiogram import Router, Dispatcher
+from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import Message, ContentType
+from aiogram.types import Message
+from aiogram import F
 from logger import setup_logger
 
 setup_logger()
 
-language = 'ru-RU'
 r = sr.Recognizer()
 router = Router()
 
-
+os.makedirs("./voice", exist_ok=True)
+os.makedirs("./ready", exist_ok=True)
 
 def recognise(filename):
     with sr.AudioFile(filename) as source:
         audio_text = r.record(source)
+        
         try:
-            text = r.recognize_google(audio_text, language=language)
-            logging.info('Конвертирую')
-            return text
-        except Exception as e:
-            logging.exception('Ошибка при распознавании: %s', e)
-            return "Не получилось, попробуйте еще раз"
+            text_ru = r.recognize_google(audio_text, language='ru-RU')
+            logging.info('Распознано на русском')
+            return f"🇷🇺 {text_ru}"
+        except:
+            pass
+        
+        try:
+            text_en = r.recognize_google(audio_text, language='en-US')
+            logging.info('Распознано на английском')
+            return f"🇺🇸 {text_en}"
+        except:
+            pass
+        
+        logging.exception('Не удалось распознать аудио')
+        return "Не получилось распознать аудио. Попробуйте еще раз."
 
-@router.message(Command('start'))
-async def cmd_start(message: Message):
-    await message.answer("Перешли мне голосовое сообщение, и я его расшифрую.")
-
-@router.message(ContentType.VOICE)
-async def voice_processing(message: Message):
+async def process_voice_message(message: Message, file_id, file_extension='ogg'):
     logging.info('Получено голосовое сообщение от %s', message.from_user.username)
+    
     filename = str(uuid.uuid4())
-    file_name_full = f"./voice/{filename}.ogg"
+    file_name_full = f"./voice/{filename}.{file_extension}"
     file_name_full_converted = f"./ready/{filename}.wav"
 
-    file_info = await message.voice.get_file()
+    # Скачиваем файл через bot
+    file_info = await message.bot.get_file(file_id)
     downloaded_file = await message.bot.download_file(file_info.file_path)
 
     async with aiofiles.open(file_name_full, 'wb') as new_file:
@@ -58,3 +66,19 @@ async def voice_processing(message: Message):
     os.remove(file_name_full)
     os.remove(file_name_full_converted)
 
+@router.message(Command('start'))
+async def cmd_start(message: Message):
+    await message.answer("Перешлите мне голосовое сообщение на русском или английском, и я его расшифрую.")
+
+@router.message(F.content_type == 'voice')
+async def voice_processing(message: Message):
+    file_id = message.voice.file_id
+    await process_voice_message(message, file_id)
+
+@router.message(F.content_type == 'audio')
+async def audio_processing(message: Message):
+    if message.audio and not message.audio.title and not message.audio.performer:
+        file_id = message.audio.file_id
+        await process_voice_message(message, file_id, 'ogg')
+    else:
+        await message.answer("Ничего не понятно")
