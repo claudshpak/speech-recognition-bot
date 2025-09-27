@@ -42,29 +42,33 @@ def recognise(filename):
 async def process_voice_message(message: Message, file_id, file_extension='ogg'):
     logging.info('Получено голосовое сообщение от %s', message.from_user.username)
     
+    processing_msg = await message.reply("✅ Получил, обрабатываю...")
+    
     filename = str(uuid.uuid4())
     file_name_full = f"./voice/{filename}.{file_extension}"
     file_name_full_converted = f"./ready/{filename}.wav"
 
-    # Скачиваем файл через bot
-    file_info = await message.bot.get_file(file_id)
-    downloaded_file = await message.bot.download_file(file_info.file_path)
+    try:
+        file_info = await message.bot.get_file(file_id)
+        downloaded_file = await message.bot.download_file(file_info.file_path)
 
-    async with aiofiles.open(file_name_full, 'wb') as new_file:
-        await new_file.write(downloaded_file.getvalue())
+        async with aiofiles.open(file_name_full, 'wb') as new_file:
+            await new_file.write(downloaded_file.getvalue())
 
-    process = await asyncio.create_subprocess_exec(
-        'ffmpeg', '-i', file_name_full, file_name_full_converted
-    )
-    await process.communicate()
+        process = await asyncio.create_subprocess_exec(
+            'ffmpeg', '-i', file_name_full, file_name_full_converted
+        )
+        await process.communicate()
 
-    text = recognise(file_name_full_converted)
+        text = recognise(file_name_full_converted)
 
-    await message.reply(text)
-    logging.info('Отправлено сообщение')
+        await processing_msg.delete()
+        await message.reply(text)
+        logging.info('Отправлено сообщение')
 
-    os.remove(file_name_full)
-    os.remove(file_name_full_converted)
+    except Exception as e:
+        await processing_msg.edit_text("❌ Произошла ошибка при обработке")
+        logging.exception('Ошибка при обработке аудио: %s', e)
 
 @router.message(Command('start'))
 async def cmd_start(message: Message):
@@ -81,4 +85,5 @@ async def audio_processing(message: Message):
         file_id = message.audio.file_id
         await process_voice_message(message, file_id, 'ogg')
     else:
+
         await message.answer("Ничего не понятно")
