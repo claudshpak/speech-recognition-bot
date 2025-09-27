@@ -25,14 +25,14 @@ def recognise(filename):
         try:
             text_ru = r.recognize_google(audio_text, language='ru-RU')
             logging.info('Распознано на русском')
-            return f"🇷🇺 {text_ru}"
+            return f"{text_ru}"
         except:
             pass
         
         try:
             text_en = r.recognize_google(audio_text, language='en-US')
             logging.info('Распознано на английском')
-            return f"🇺🇸 {text_en}"
+            return f"{text_en}"
         except:
             pass
         
@@ -87,3 +87,4 @@ async def audio_processing(message: Message):
     else:
 
         await message.answer("Ничего не понятно")
+
